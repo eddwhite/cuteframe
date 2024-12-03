@@ -1,15 +1,7 @@
-'''
-TODO
-- put on github
-- cronjob for on boot
-
-- What to use to display content? xscreensaver? Browser?
-'''
-
 import os
 from instaloader import Instaloader, Post
 from telegram import Update, TelegramObject
-from telegram.ext import filters, MessageHandler, CommandHandler, TypeHandler, ApplicationBuilder, ContextTypes, ApplicationHandlerStop
+from telegram.ext import ConversationHandler, filters, MessageHandler, CommandHandler, TypeHandler, ApplicationBuilder, ContextTypes, ApplicationHandlerStop
 from mysecrets import BOT_TOKEN
 import ffmpeg
 from pyrlottie import LottieFile, convSingleLottie
@@ -87,12 +79,29 @@ async def catch_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(update.message.chat_id, "Sorry, I don't understand that command")
 
 
-async def brightness(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def brightness(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     print(f"Got brightness command with args: {context.args}")
+    if len(context.args) > 0:
+        try:
+            backlight.value = 1 - (int(context.args[0]) / 100)
+            return ConversationHandler.END
+        except ValueError:
+            pass
+    await update.message.reply_text("Now send a number between 0 and 100")
+    return 0
+
+async def brightness_value(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
-        backlight.value = int(context.args[0]) / 100
-    except ValueError or IndexError:
-        await context.bot.send_message(update.message.chat_id, "Brightness must be between 1 and 100")
+        backlight.value = 1 - (int(update.message.text) / 100)
+        return ConversationHandler.END
+    except ValueError:
+        pass
+    await update.message.reply_text("Try again! Send a number between 0 and 100 (or /cancel to give up!)")
+    return 0
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("Try again another time!")
+    return ConversationHandler.END
 
 async def shutdown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print("Turning off!")
@@ -122,7 +131,7 @@ app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 
 app.add_handler(TypeHandler(Update, restrict_users), -1)
 
-app.add_handler(CommandHandler('brightness', brightness))
+app.add_handler(ConversationHandler(entry_points=[CommandHandler('brightness', brightness)], states={0: [MessageHandler(filters.TEXT & ~filters.COMMAND, brightness_value)],}, fallbacks=[CommandHandler("cancel", cancel)]))
 app.add_handler(CommandHandler('shutdown', shutdown))
 app.add_handler(CommandHandler('reboot', reboot))
 app.add_handler(MessageHandler(filters.PHOTO, photo))
