@@ -74,11 +74,11 @@ async def sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resize_media(out, f'out/{out_file_path.split("/")[-1].replace(".tgs", ".gif")}')
 
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    out_file_path = await download_media(update.message.sticker, context)
+    out_file_path = await download_media(update.message.animation, context)
     resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}')
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    out_file_path = await download_media(update.message.sticker, context)
+    out_file_path = await download_media(update.message.photo[-1], context)
     resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}')
 
 
