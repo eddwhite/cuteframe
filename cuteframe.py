@@ -35,7 +35,7 @@ def resize_media(in_path: str, out_path: str) -> None:
         width = int(width * scale_factor)
         height = int(height * scale_factor)
         stream = stream.filter('scale', width, height)
-    
+
     # Crop to the correct aspect ratio
     if width != 720 or height != 720:
         excess_height = height - 720
@@ -102,13 +102,6 @@ async def reboot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print("Rebooting!")
     os.system("sudo reboot")
 
-async def update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    print("Updating code!")
-    # TODO tell git to pull latest code
-    os.system("git pull")
-    await reboot(update, context)
-
-
 async def restrict_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id in [1158879753]:
         pass
@@ -116,6 +109,8 @@ async def restrict_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text("Hey! You are not allowed to use me!")
         raise ApplicationHandlerStop
 
+async def post_init(application) -> None:
+    await application.bot.set_my_commands([('brightness', 'Set the brightness [0-100]'), ('shutdown', 'Shutdown safely'), ('reboot', 'Reboot')])
 
 # Make directories if they don't exist
 if not os.path.exists('out'):
@@ -123,12 +118,11 @@ if not os.path.exists('out'):
 if not os.path.exists('tmp'):
     os.makedirs('tmp')
 
-app = ApplicationBuilder().token(BOT_TOKEN).build()
+app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 
 app.add_handler(TypeHandler(Update, restrict_users), -1)
 
 app.add_handler(CommandHandler('brightness', brightness))
-app.add_handler(CommandHandler('update', update))
 app.add_handler(CommandHandler('shutdown', shutdown))
 app.add_handler(CommandHandler('reboot', reboot))
 app.add_handler(MessageHandler(filters.PHOTO, photo))
