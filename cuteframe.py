@@ -4,44 +4,62 @@ from telegram import Update, TelegramObject
 from telegram.ext import ConversationHandler, filters, MessageHandler, CommandHandler, TypeHandler, ApplicationBuilder, ContextTypes, ApplicationHandlerStop
 from mysecrets import BOT_TOKEN
 import ffmpeg
-from pyrlottie import LottieFile, convSingleLottie
+#from pyrlottie import LottieFile, convSingleLottie
 from gpiozero import PWMLED
+import subprocess as sp
+import glob
 
-
-insta = Instaloader(filename_pattern='{shortcode}')
 
 backlight = PWMLED(18, initial_value=0)
+insta = Instaloader(filename_pattern='{shortcode}')
+player = sp.Popen("exec mpv --fs --loop out/default.mp4", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
 
 
-def resize_media(in_path: str, out_path: str) -> None:
+def clear_tmp() -> None:
+    files = glob.glob('tmp/*')
+    for f in files:
+        os.remove(f)
+
+def update_display(file_path: str) -> None:
+    global player
+    player.kill()
+    player.wait()
+    player = sp.Popen(f"exec mpv --fs --loop {file_path}", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+    clr_tmp()
+
+def resize_media(in_path: str, out_path: str) -> str:
+    global player
+    player.kill()  # Kill the player so we have some CPU for ffmpeg!
+
+    if os.path.is_file(out_path):
+        return out_path
+
     # Get the width and height
     probe = ffmpeg.probe(in_path)
     width, height = probe['streams'][0]['width'], probe['streams'][0]['height']
     print(f'Input file is {width}x{height}')
 
-    stream = ffmpeg.input(in_path)
-
-    # First upscale if necessary
-    if width < 720 or height < 720:
-        scale_factor = 720 / min(width, height)
-        width = int(width * scale_factor)
-        height = int(height * scale_factor)
-        stream = stream.filter('scale', width, height)
+    stream = ffmpeg.input(in_path).video
 
     # Crop to the correct aspect ratio
-    if width != 720 or height != 720:
-        excess_height = height - 720
-        excess_width = width - 720
-        # Crop the video to the desired size
-        stream = stream.crop(x=excess_width/2, y=excess_height/2, width=720, height=720)
+    smallest_side = min(width, height)
+    if width != height:
+        excess_height = height - smallest_side
+        excess_width = width - smallest_side
+        stream = stream.crop(x=excess_width//2, y=excess_height//2, width=smallest_side, height=smallest_side)
+
+    # Scale to match display
+    if smallest_side != 720:
+        stream = stream.filter('scale', 720, 720)
 
     # Different output command for images
     if in_path.endswith(('.png', '.jpg', '.jpeg')):
         stream = stream.output(out_path, vframes=1)
     else:
-        stream = stream.output(out_path)
+        stream = stream.output(out_path, vcodec='h264_v4l2m2m')
 
     stream.run(overwrite_output=True)
+    return out_path
 
 
 async def download_media(obj: TelegramObject, context: ContextTypes.DEFAULT_TYPE) -> str:
@@ -53,25 +71,27 @@ async def download_media(obj: TelegramObject, context: ContextTypes.DEFAULT_TYPE
 
 
 async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global insta
     insta_shortcode = update.message.text.split('/reel/')[1].split('/')[0]
     print(f"Got shortcode {insta_shortcode} from url: {update.message.text}")
     post = Post.from_shortcode(insta.context, insta_shortcode)
-    insta.download_post(post, 'tmp/')
-    resize_media(f'tmp/{insta_shortcode}.mp4', f'out/{insta_shortcode}.mp4')
+    insta.download_post(post, 'tmp')
+    update_display(resize_media(f'tmp/{insta_shortcode}.mp4', f'out/{insta_shortcode}.mp4'))
 
 async def sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    out_file_path = await download_media(update.message.sticker, context)
+    await context.bot.send_message(update.message.chat_id, "Sorry, stickers do not work \U0001F62D")
+    #out_file_path = await download_media(update.message.sticker, context)
     # Convert telegram sticker to gif
-    out = (await convSingleLottie(lottieFile=LottieFile(out_file_path), destFiles={out_file_path.replace('.tgs', '.gif')})).pop()
-    resize_media(out, f'out/{out_file_path.split("/")[-1].replace(".tgs", ".gif")}')
+    #out = (await convSingleLottie(lottieFile=LottieFile(out_file_path), destFiles={out_file_path.replace('.tgs', '.gif')})).pop()
+    #update_display(resize_media(out, f'out/{out_file_path.split("/")[-1].replace(".tgs", ".gif")}'))
 
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     out_file_path = await download_media(update.message.animation, context)
-    resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}')
+    update_display(resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}'))
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     out_file_path = await download_media(update.message.photo[-1], context)
-    resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}')
+    update_display(resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}'))
 
 
 async def catch_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -127,6 +147,8 @@ if not os.path.exists('out'):
 if not os.path.exists('tmp'):
     os.makedirs('tmp')
 
+print('About to build bot!')
+
 app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 
 app.add_handler(TypeHandler(Update, restrict_users), -1)
@@ -139,4 +161,6 @@ app.add_handler(MessageHandler(filters.ANIMATION, gif))
 app.add_handler(MessageHandler(filters.Sticker.ALL, sticker))
 app.add_handler(MessageHandler(filters.TEXT & (filters.Entity("url") | filters.Entity("text_link")), url))
 app.add_handler(MessageHandler(filters.ALL, catch_all))
+
+print('Entering bot polling loop')
 app.run_polling()
