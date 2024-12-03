@@ -1,13 +1,7 @@
 '''
 TODO
-- setup virtual environment
 - put on github
-- Setup script
- - install shit
- - cronjobs - on boot
-
-- Bot protection against other users
-- Bot ability to update itself? Perform git update & relaunch itself
+- cronjob for on boot
 
 - What to use to display content? xscreensaver? Browser?
 '''
