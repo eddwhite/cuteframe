@@ -1,4 +1,4 @@
 [Desktop Entry]
     Type=Application
     Name=cuteframe
-    Exec=/home/frame/cuteframe/venv/bin/python3 -u /home/frame/cuteframe/cuteframe.py
+    Exec=/home/frame/cuteframe/venv/bin/python3 -u /home/frame/cuteframe/cuteframe.py > /home/frame/cuteframe/app.log
