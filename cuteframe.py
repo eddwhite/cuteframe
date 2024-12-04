@@ -5,15 +5,15 @@ from telegram.ext import ConversationHandler, filters, MessageHandler, CommandHa
 from mysecrets import BOT_TOKEN
 import ffmpeg
 #from pyrlottie import LottieFile, convSingleLottie
-from gpiozero import PWMLED
 import subprocess as sp
 import glob
 
+
 os.chdir("/home/frame/cuteframe/")
 
-backlight = PWMLED(18, initial_value=0)
 insta = Instaloader(filename_pattern='{shortcode}')
 player = sp.Popen("exec mpv --fs --loop out/default.mp4", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+sp.run("gpio -g mode 18 pwm && gpio pwmc 100", shell=True)
 
 
 def clear_tmp() -> None:
@@ -100,11 +100,15 @@ async def catch_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(update.message.chat_id, "Sorry, I don't understand that command")
 
 
+def set_brightness(percentage: int) -> None:
+    value = 1023 * (1 - (percentage / 100))
+    sp.run(f"gpio -g pwm 18 {value}", shell=True) # 0 is brightest, 1023 is dimmest
+
 async def brightness(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     print(f"Got brightness command with args: {context.args}")
     if len(context.args) > 0:
         try:
-            backlight.value = 1 - (int(context.args[0]) / 100)
+            set_brightness(int(context.args[0]))
             return ConversationHandler.END
         except ValueError:
             pass
@@ -113,7 +117,7 @@ async def brightness(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def brightness_value(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
-        backlight.value = 1 - (int(update.message.text) / 100)
+        set_brightness(int(update.message.text))
         return ConversationHandler.END
     except ValueError:
         pass
