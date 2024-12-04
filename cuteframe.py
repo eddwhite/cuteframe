@@ -9,6 +9,7 @@ from gpiozero import PWMLED
 import subprocess as sp
 import glob
 
+os.chdir("/home/frame/cuteframe/")
 
 backlight = PWMLED(18, initial_value=0)
 insta = Instaloader(filename_pattern='{shortcode}')
@@ -25,13 +26,13 @@ def update_display(file_path: str) -> None:
     player.kill()
     player.wait()
     player = sp.Popen(f"exec mpv --fs --loop {file_path}", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
-    clr_tmp()
+    clear_tmp()
 
 def resize_media(in_path: str, out_path: str) -> str:
     global player
     player.kill()  # Kill the player so we have some CPU for ffmpeg!
 
-    if os.path.is_file(out_path):
+    if os.path.isfile(out_path):
         return out_path
 
     # Get the width and height
