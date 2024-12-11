@@ -137,7 +137,7 @@ async def reboot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     os.system("sudo reboot")
 
 async def restrict_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id in [1158879753]:
+    if update.effective_user.id in [1158879753, 1203514639]:
         pass
     else:
         await update.effective_message.reply_text("Hey! You are not allowed to use me!")
