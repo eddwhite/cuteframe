@@ -10,6 +10,7 @@ import requests
 import json
 import gzip
 import time
+import datetime
 
 
 os.chdir("/home/frame/cuteframe/")
@@ -171,6 +172,29 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Try again another time!")
     return ConversationHandler.END
 
+async def update_sleep_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE, name: str) -> None:
+    print(f"Got sleep schedule update command with args: {context.args}")
+    try:
+        hour, minute = [int(x) for x in context.args[0].split(':')]
+        if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+            raise ValueError
+        
+        for job in context.job_queue.get_jobs_by_name(name):
+            job.schedule_removal()
+
+        context.job_queue.run_daily(display_off, time=datetime.time(hour=hour, minute=minute), name=name)
+        return
+    except:
+        pass
+    # If we get here, the input was invalid
+    await update.message.reply_text("You must include a time in the format HH:MM")
+
+async def bedtime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update_sleep_schedule(update, context, 'bedtime')
+
+async def risetime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update_sleep_schedule(update, context, 'risetime')
+
 async def shutdown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print("Turning off!")
     os.system("sudo shutdown -h now")
@@ -187,7 +211,19 @@ async def restrict_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         raise ApplicationHandlerStop
 
 async def post_init(application) -> None:
-    await application.bot.set_my_commands([('brightness', 'Set the brightness [0-100]'), ('shutdown', 'Shutdown safely'), ('reboot', 'Reboot')])
+    await application.bot.set_my_commands([('brightness', 'Set the brightness [0-100]'), 
+                                           ('bedtime', 'Set the time to turn off the display [hh:mm]'), 
+                                           ('risetime', 'Set the time to turn on the display [hh:mm]'),
+                                           ('shutdown', 'Shutdown safely'), 
+                                           ('reboot', 'Reboot')])
+
+async def display_off(_: ContextTypes.DEFAULT_TYPE):
+    print("Scheduler says turn off display!")
+    set_brightness(0)
+
+async def display_on(_: ContextTypes.DEFAULT_TYPE):
+    print("Scheduler says turn on display!")
+    set_brightness(100)
 
 # Make directories if they don't exist
 if not os.path.exists('out'):
@@ -204,11 +240,16 @@ app.add_handler(TypeHandler(Update, restrict_users), -1)
 app.add_handler(ConversationHandler(entry_points=[CommandHandler('brightness', brightness)], states={0: [MessageHandler(filters.TEXT & ~filters.COMMAND, brightness_value)],}, fallbacks=[CommandHandler("cancel", cancel)]))
 app.add_handler(CommandHandler('shutdown', shutdown))
 app.add_handler(CommandHandler('reboot', reboot))
+app.add_handler(CommandHandler('bedtime', bedtime))
+app.add_handler(CommandHandler('risetime', risetime))
 app.add_handler(MessageHandler(filters.PHOTO, photo))
 app.add_handler(MessageHandler(filters.ANIMATION, gif))
 app.add_handler(MessageHandler(filters.Sticker.ALL, sticker))
 app.add_handler(MessageHandler(filters.TEXT & (filters.Entity("url") | filters.Entity("text_link")), url))
 app.add_handler(MessageHandler(filters.ALL, catch_all))
+
+app.job_queue.run_daily(display_off, time=datetime.time(hour=23), name='bedtime')
+app.job_queue.run_daily(display_on, time=datetime.time(hour=8, minute=30), name='risetime')
 
 print('Entering bot polling loop')
 app.run_polling()
