@@ -180,9 +180,10 @@ async def update_sleep_schedule(update: Update, context: ContextTypes.DEFAULT_TY
             raise ValueError
         
         for job in context.job_queue.get_jobs_by_name(name):
+            callback = job.callback
             job.schedule_removal()
 
-        context.job_queue.run_daily(display_off, time=datetime.time(hour=hour, minute=minute), name=name)
+        context.job_queue.run_daily(callback, time=datetime.time(hour=hour, minute=minute), name=name)
         return
     except:
         pass
