@@ -4,9 +4,12 @@ from telegram import Update, TelegramObject
 from telegram.ext import ConversationHandler, filters, MessageHandler, CommandHandler, TypeHandler, ApplicationBuilder, ContextTypes, ApplicationHandlerStop
 from mysecrets import BOT_TOKEN
 import ffmpeg
-#from pyrlottie import LottieFile, convSingleLottie
 import subprocess as sp
 import glob
+import requests
+import json
+import gzip
+import time
 
 
 os.chdir("/home/frame/cuteframe/")
@@ -62,7 +65,6 @@ def resize_media(in_path: str, out_path: str) -> str:
     stream.run(overwrite_output=True)
     return out_path
 
-
 async def download_media(obj: TelegramObject, context: ContextTypes.DEFAULT_TYPE) -> str:
     print(f'Downloading {obj}')
     file = await context.bot.get_file(obj)
@@ -70,6 +72,48 @@ async def download_media(obj: TelegramObject, context: ContextTypes.DEFAULT_TYPE
     await file.download_to_drive(out_file_path)
     return out_file_path
 
+def tgs_to_mp4(tgs_file_path: str) -> str | None:
+    try:
+        # A telegram sticker is just a Lottie JSON that has been gzipped
+        with gzip.open(tgs_file_path) as f:
+            lottie_json = json.loads(f.read())
+
+        # Use "API" taken from https://lottietovideo.com/
+        r = requests.post('https://l73mqtglr0.execute-api.eu-west-1.amazonaws.com/prod/', json={'name': 'lottietovideo', 'animation': lottie_json})
+        if r.status_code != 200:
+            print(f"Got error code {r.status_code} from lottietovideo API POST")
+            return None
+
+        tgs_id = r.json()['id'].split('-')[-1]
+
+        # Wait for the video to be ready
+        retry_count = 0
+        while retry_count < 5 and requests.head(f"https://d2f5b11l106s2w.cloudfront.net/lottietovideo-{tgs_id}.mp4").status_code != 200:
+            time.sleep(2)
+            retry_count += 1
+
+        if retry_count == 5:
+            print(f"Lottietovideo API HEAD timeout")
+            return None
+
+        r = requests.get(f"https://d2f5b11l106s2w.cloudfront.net/lottietovideo-{tgs_id}.mp4")
+        if r.status_code != 200:
+            print(f"Got error code {r.status_code} from lottietovideo API GET")
+            return None
+
+        out_fp = f"{tgs_file_path.rstrip('.tgs')}.mp4"
+        with open(out_fp, "wb") as f:
+            f.write(r.content)
+
+        return out_fp
+
+    except Exception as e:
+        print(e)
+        return None
+
+'''
+The following are all handlers called by the Python Telegram Bot in response to messages from the user
+'''
 
 async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global insta
@@ -80,11 +124,10 @@ async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     update_display(resize_media(f'tmp/{insta_shortcode}.mp4', f'out/{insta_shortcode}.mp4'))
 
 async def sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(update.message.chat_id, "Sorry, stickers do not work \U0001F62D")
-    #out_file_path = await download_media(update.message.sticker, context)
-    # Convert telegram sticker to gif
-    #out = (await convSingleLottie(lottieFile=LottieFile(out_file_path), destFiles={out_file_path.replace('.tgs', '.gif')})).pop()
-    #update_display(resize_media(out, f'out/{out_file_path.split("/")[-1].replace(".tgs", ".gif")}'))
+    out_file_path = await download_media(update.message.sticker, context)
+    tgs_mp4 = tgs_to_mp4(out_file_path)
+    if tgs_mp4 is not None:
+        update_display(resize_media(tgs_mp4, f'out/{tgs_mp4.split("/")[-1]}'))
 
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     out_file_path = await download_media(update.message.animation, context)
