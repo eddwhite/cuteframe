@@ -163,7 +163,6 @@ async def whats_on_display(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("Asked what's on display now")
     if not whats_on:
         await update.message.reply_text("Default GIF is displayed") # ? what about the loading screen ?
-        return ConversationHandler.END
     else:
         media_type = type(whats_on)
         if media_type is str:
@@ -176,7 +175,6 @@ async def whats_on_display(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_photo(whats_on)
         else:
             await update.message.reply_text(f"Unrecognised type is on display: {media_type}")
-        return ConversationHandler.END
 
 def set_brightness(percentage: int) -> None:
     value = 1023 * (1 - (percentage / 100))
