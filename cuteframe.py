@@ -1,6 +1,8 @@
 import os
+from typing import Optional
+
 from instaloader import Instaloader, Post
-from telegram import Update, TelegramObject
+from telegram import Update, TelegramObject, Sticker, Animation, PhotoSize
 from telegram.ext import ConversationHandler, filters, MessageHandler, CommandHandler, TypeHandler, ApplicationBuilder, ContextTypes, ApplicationHandlerStop
 from mysecrets import BOT_TOKEN
 import ffmpeg
@@ -19,6 +21,12 @@ insta = Instaloader(filename_pattern='{shortcode}')
 player = sp.Popen("exec mpv --fs --loop out/default.mp4", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
 sp.run("gpio -g mode 18 pwm && gpio pwmc 100", shell=True)
 
+# Stores the media that was sent to the frame last.
+# str = URL
+# Sticker = Telegram sticker
+# Animation = GIF
+# PhotoSize = photo
+whats_on: Optional[str, Sticker, Animation, tuple[PhotoSize, ...]] = None
 
 def clear_tmp() -> None:
     files = glob.glob('tmp/*')
@@ -118,31 +126,57 @@ The following are all handlers called by the Python Telegram Bot in response to 
 
 async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global insta
+    global whats_on
     insta_shortcode = update.message.text.split('/reel/')[1].split('/')[0]
     print(f"Got shortcode {insta_shortcode} from url: {update.message.text}")
     post = Post.from_shortcode(insta.context, insta_shortcode)
     insta.download_post(post, 'tmp')
     update_display(resize_media(f'tmp/{insta_shortcode}.mp4', f'out/{insta_shortcode}.mp4'))
+    whats_on = update.message.text
 
 async def sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global whats_on
     out_file_path = await download_media(update.message.sticker, context)
     tgs_mp4 = tgs_to_mp4(out_file_path)
     if tgs_mp4 is not None:
         update_display(resize_media(tgs_mp4, f'out/{tgs_mp4.split("/")[-1]}'))
+        whats_on = update.message.sticker
 
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global whats_on
     out_file_path = await download_media(update.message.animation, context)
     update_display(resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}'))
+    whats_on = update.message.animation
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global whats_on
     out_file_path = await download_media(update.message.photo[-1], context)
     update_display(resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}'))
+    whats_on = update.message.photo
 
 
 async def catch_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print(f"Got something unexpected: {update.message}")
     await context.bot.send_message(update.message.chat_id, "Sorry, I don't understand that command")
 
+async def whats_on_display(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("Asked what's on display now")
+    if not whats_on:
+        await update.message.reply_text("Default GIF is displayed") # ? what about the loading screen ?
+        return ConversationHandler.END
+    else:
+        media_type = type(whats_on)
+        if media_type is str:
+            await update.message.reply_text(whats_on)
+        elif media_type is Sticker:
+            await update.message.reply_sticker(whats_on)
+        elif media_type is Animation:
+            await update.message.reply_animation(whats_on)
+        elif media_type is tuple[PhotoSize, ...]:
+            await update.message.reply_photo(whats_on)
+        else:
+            await update.message.reply_text(f"Unrecognised type is on display: {media_type}")
+        return ConversationHandler.END
 
 def set_brightness(percentage: int) -> None:
     value = 1023 * (1 - (percentage / 100))
@@ -212,7 +246,8 @@ async def restrict_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         raise ApplicationHandlerStop
 
 async def post_init(application) -> None:
-    await application.bot.set_my_commands([('brightness', 'Set the brightness [0-100]'), 
+    await application.bot.set_my_commands([('brightness', 'Set the brightness [0-100]'),
+                                           ('whatson', 'See currently displayed media'),
                                            ('bedtime', 'Set the time to turn off the display [hh:mm]'), 
                                            ('risetime', 'Set the time to turn on the display [hh:mm]'),
                                            ('shutdown', 'Shutdown safely'), 
@@ -243,6 +278,7 @@ app.add_handler(CommandHandler('shutdown', shutdown))
 app.add_handler(CommandHandler('reboot', reboot))
 app.add_handler(CommandHandler('bedtime', bedtime))
 app.add_handler(CommandHandler('risetime', risetime))
+app.add_handler(CommandHandler('whatson', whats_on_display))
 app.add_handler(MessageHandler(filters.PHOTO, photo))
 app.add_handler(MessageHandler(filters.ANIMATION, gif))
 app.add_handler(MessageHandler(filters.Sticker.ALL, sticker))
