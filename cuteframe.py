@@ -138,10 +138,13 @@ async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global whats_on
     insta_shortcode = update.message.text.split('/reel/')[1].split('/')[0]
     print(f"Got shortcode {insta_shortcode} from url: {update.message.text}")
-    post = Post.from_shortcode(insta.context, insta_shortcode)
-    insta.download_post(post, 'tmp')
-    update_display(resize_media(f'tmp/{insta_shortcode}.mp4', f'out/{insta_shortcode}.mp4'))
-    whats_on = update.message.text
+    try:
+        post = Post.from_shortcode(insta.context, insta_shortcode)
+        insta.download_post(post, 'tmp')
+        update_display(resize_media(f'tmp/{insta_shortcode}.mp4', f'out/{insta_shortcode}.mp4'))
+        whats_on = update.message.text
+    except Exception as e:
+        print(f"Exception for Instagram: {e}")
 
 async def sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global whats_on
