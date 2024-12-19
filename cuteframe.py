@@ -17,7 +17,16 @@ import datetime
 
 os.chdir("/home/frame/cuteframe/")
 
-insta = Instaloader(filename_pattern='{shortcode}')
+insta = Instaloader(
+    filename_pattern='{shortcode}',
+    max_connection_attempts=1,
+    save_metadata=False,
+    download_comments=False,
+    download_geotags=False,
+    download_pictures=False,
+    post_metadata_txt_pattern='',
+    request_timeout=10
+)
 player = sp.Popen("exec mpv --fs --loop out/default.mp4", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
 sp.run("gpio -g mode 18 pwm && gpio pwmc 100", shell=True)
 
