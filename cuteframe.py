@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, Union
 
 from instaloader import Instaloader, Post
 from telegram import Update, TelegramObject, Sticker, Animation, PhotoSize
@@ -30,12 +30,12 @@ insta = Instaloader(
 player = sp.Popen("exec mpv --fs --loop out/default.mp4", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
 sp.run("gpio -g mode 18 pwm && gpio pwmc 100", shell=True)
 
-# Stores the media that was sent to the frame last.
+# Stores the media that was sent to the frame last. It will be one of:
 # str = URL
 # Sticker = Telegram sticker
 # Animation = GIF
 # PhotoSize = photo
-whats_on: Optional[str, Sticker, Animation, tuple[PhotoSize, ...]] = None
+whats_on: Optional[Union[str, Sticker, Animation, tuple[PhotoSize, ...]]] = None
 
 def clear_tmp() -> None:
     files = glob.glob('tmp/*')
