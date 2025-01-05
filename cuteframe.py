@@ -276,7 +276,7 @@ async def restrict_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def post_init(application) -> None:
     await application.bot.set_my_commands([('brightness', 'Set the brightness [0-100]'),
                                            ('whenupdated', 'Find out when the last media update was received'),
-                                           ('whatson', 'Find out what is currently being displayed')
+                                           ('whatson', 'Find out what is currently being displayed'),
                                            ('bedtime', 'Set the time to turn off the display [hh:mm]'), 
                                            ('risetime', 'Set the time to turn on the display [hh:mm]'),
                                            ('shutdown', 'Shutdown safely'), 
