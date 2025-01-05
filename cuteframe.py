@@ -12,6 +12,7 @@ import json
 import gzip
 import time
 import datetime
+import functools
 
 
 os.chdir("/home/frame/cuteframe/")
@@ -45,6 +46,8 @@ def update_display(file_path: str) -> None:
     global player
     player.kill()
     player.wait()
+    if not os.path.exists(file_path):
+        raise Exception("No file exists to display")
     player = sp.Popen(f"exec mpv --fs --loop {file_path}", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
     clear_tmp()
     record_when_updated()
@@ -129,31 +132,50 @@ def tgs_to_mp4(tgs_file_path: str) -> str | None:
         print(e)
         return None
 
+
+'''
+Decorator that sends a message saying if the operation succeeded or not, based on an exception getting raised or not
+'''
+def respond_with_result(func):
+    @functools.wraps(func)
+    async def wrapper_respond_with_result(*args, **kwargs):
+        ret = None
+        try:
+            ret = await func(*args, **kwargs)
+            await args[0].message.reply_text("Display successfully updated")
+        except Exception as e:
+            await args[0].message.reply_text(f"Failed to update display with exception: {e}")
+        return ret
+    return wrapper_respond_with_result
+
+
 '''
 The following are all handlers called by the Python Telegram Bot in response to messages from the user
 '''
 
+@respond_with_result
 async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global insta
     insta_shortcode = update.message.text.split('/reel/')[1].split('/')[0]
     print(f"Got shortcode {insta_shortcode} from url: {update.message.text}")
-    try:
-        post = Post.from_shortcode(insta.context, insta_shortcode)
-        insta.download_post(post, 'tmp')
-        update_display(resize_media(f'tmp/{insta_shortcode}.mp4', f'out/{insta_shortcode}.mp4'))
-    except Exception as e:
-        print(f"Exception for Instagram: {e}")
+    post = Post.from_shortcode(insta.context, insta_shortcode)
+    insta.download_post(post, 'tmp')
+    update_display(resize_media(f'tmp/{insta_shortcode}.mp4', f'out/{insta_shortcode}.mp4'))
 
+@respond_with_result
 async def sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     out_file_path = await download_media(update.message.sticker, context)
     tgs_mp4 = tgs_to_mp4(out_file_path)
-    if tgs_mp4 is not None:
-        update_display(resize_media(tgs_mp4, f'out/{tgs_mp4.split("/")[-1]}'))
+    if tgs_mp4 is None:
+        raise Exception("Failed to turn sticker to MP4")
+    update_display(resize_media(tgs_mp4, f'out/{tgs_mp4.split("/")[-1]}'))
 
+@respond_with_result
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     out_file_path = await download_media(update.message.animation, context)
     update_display(resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}'))
 
+@respond_with_result
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     out_file_path = await download_media(update.message.photo[-1], context)
     update_display(resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}'))
