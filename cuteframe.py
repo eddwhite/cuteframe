@@ -47,6 +47,7 @@ def update_display(file_path: str) -> None:
     player.wait()
     player = sp.Popen(f"exec mpv --fs --loop {file_path}", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
     clear_tmp()
+    record_when_updated()
 
 def resize_media(in_path: str, out_path: str) -> str:
     global player
@@ -140,7 +141,6 @@ async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         post = Post.from_shortcode(insta.context, insta_shortcode)
         insta.download_post(post, 'tmp')
         update_display(resize_media(f'tmp/{insta_shortcode}.mp4', f'out/{insta_shortcode}.mp4'))
-        record_when_updated()
     except Exception as e:
         print(f"Exception for Instagram: {e}")
 
@@ -149,17 +149,14 @@ async def sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tgs_mp4 = tgs_to_mp4(out_file_path)
     if tgs_mp4 is not None:
         update_display(resize_media(tgs_mp4, f'out/{tgs_mp4.split("/")[-1]}'))
-        record_when_updated()
 
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     out_file_path = await download_media(update.message.animation, context)
     update_display(resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}'))
-    record_when_updated()
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     out_file_path = await download_media(update.message.photo[-1], context)
     update_display(resize_media(out_file_path, f'out/{out_file_path.split("/")[-1]}'))
-    record_when_updated()
 
 
 async def catch_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -168,7 +165,9 @@ async def catch_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def when_updated(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("Asked when was the last media update")
-    await update.message.reply_text(f"Last updated on: {when_updated_timestamp}")
+    date_diff = datetime.datetime.now() - when_updated_timestamp
+    date_components = str(date_diff).split(':')
+    await update.message.reply_text(f"Time since last update: {date_components[0]} hours and {int(date_components[1])} minutes")
 
 def set_brightness(percentage: int) -> None:
     value = 1023 * (1 - (percentage / 100))
@@ -277,8 +276,8 @@ app.add_handler(MessageHandler(filters.Sticker.ALL, sticker))
 app.add_handler(MessageHandler(filters.TEXT & (filters.Entity("url") | filters.Entity("text_link")), url))
 app.add_handler(MessageHandler(filters.ALL, catch_all))
 
-app.job_queue.run_daily(display_off, time=datetime.time(hour=23), name='bedtime')
-app.job_queue.run_daily(display_on, time=datetime.time(hour=8, minute=30), name='risetime')
+app.job_queue.run_daily(display_off, time=datetime.time(hour=23, minute=30), name='bedtime')
+app.job_queue.run_daily(display_on, time=datetime.time(hour=7, minute=30), name='risetime')
 
 print('Entering bot polling loop')
 app.run_polling()
