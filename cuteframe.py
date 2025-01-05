@@ -25,13 +25,17 @@ insta = Instaloader(
     download_geotags=False,
     download_pictures=False,
     post_metadata_txt_pattern='',
-    request_timeout=10
+    request_timeout=300
 )
 player = sp.Popen("exec mpv --fs --loop out/default.mp4", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
 sp.run("gpio -g mode 18 pwm && gpio pwmc 100", shell=True)
 
 # When was the frame media updated last
 when_updated_timestamp = datetime.datetime.now().replace(microsecond=0)
+
+# The name of the file being displayed at the moment
+file_being_displayed = 'out/default.mp4'
+
 
 def record_when_updated() -> None:
     global when_updated_timestamp
@@ -44,11 +48,13 @@ def clear_tmp() -> None:
 
 def update_display(file_path: str) -> None:
     global player
+    global file_being_displayed
     player.kill()
     player.wait()
     if not os.path.exists(file_path):
         raise Exception("No file exists to display")
     player = sp.Popen(f"exec mpv --fs --loop {file_path}", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+    file_being_displayed = file_path
     clear_tmp()
     record_when_updated()
 
@@ -191,6 +197,15 @@ async def when_updated(update: Update, context: ContextTypes.DEFAULT_TYPE):
     date_components = str(date_diff).split(':')
     await update.message.reply_text(f"Time since last update: {date_components[0]} hours and {int(date_components[1])} minutes")
 
+async def whats_on(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    print("Asked whats on the display")
+    if file_being_displayed.endswith('.mp4'):
+        await update.message.reply_video(file_being_displayed)
+    elif file_being_displayed.endswith(('.jpg', '.jpeg', '.png')):
+        await update.message.reply_photo(file_being_displayed)
+    else:
+        await update.message.reply_text(f'Unsupported file being displayed: {file_being_displayed}')
+
 def set_brightness(percentage: int) -> None:
     value = 1023 * (1 - (percentage / 100))
     sp.run(f"gpio -g pwm 18 {value}", shell=True) # 0 is brightest, 1023 is dimmest
@@ -261,6 +276,7 @@ async def restrict_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def post_init(application) -> None:
     await application.bot.set_my_commands([('brightness', 'Set the brightness [0-100]'),
                                            ('whenupdated', 'Find out when the last media update was received'),
+                                           ('whatson', 'Find out what is currently being displayed')
                                            ('bedtime', 'Set the time to turn off the display [hh:mm]'), 
                                            ('risetime', 'Set the time to turn on the display [hh:mm]'),
                                            ('shutdown', 'Shutdown safely'), 
@@ -292,6 +308,7 @@ app.add_handler(CommandHandler('reboot', reboot))
 app.add_handler(CommandHandler('bedtime', bedtime))
 app.add_handler(CommandHandler('risetime', risetime))
 app.add_handler(CommandHandler('whenupdated', when_updated))
+app.add_handler(CommandHandler('whatson', whats_on))
 app.add_handler(MessageHandler(filters.PHOTO, photo))
 app.add_handler(MessageHandler(filters.ANIMATION, gif))
 app.add_handler(MessageHandler(filters.Sticker.ALL, sticker))
