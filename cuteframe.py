@@ -27,6 +27,11 @@ insta = Instaloader(
     post_metadata_txt_pattern='',
     request_timeout=300
 )
+
+# Save the session to a file first and use appropriate username.
+# See how to do that in README.
+insta.load_session_from_file('USERNAME') 
+
 player = sp.Popen("exec mpv --fs --loop out/default.mp4", shell=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
 sp.run("gpio -g mode 18 pwm && gpio pwmc 100", shell=True)
 
